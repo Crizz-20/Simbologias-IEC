@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prueba de Símbolos IEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F7FC;
+    --bg-grid:#DCE7F5;
+    --panel:#FFFFFF;
+    --panel-2:#EDF3FB;
+    --panel-glass:rgba(255,255,255,.82);
+    --border:#BFD3EA;
+    --border-soft:#D6E3F3;
+    --text:#132340;
+    --muted:#5D7699;
+    --iec:#E8590C;
+    --iec-dim:#FFE3C7;
+    --nema:#0B7285;
+    --nema-dim:#D7F0F3;
+    --ok:#149954;
+    --ok-dim:#D8F5E4;
+    --bad:#E63946;
+    --bad-dim:#FCE0E1;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'JetBrains Mono', monospace;
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  ::selection{background:var(--iec-dim);color:var(--iec);}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:var(--bg);}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
+  @media (prefers-reduced-motion: reduce){ *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+  h1,h2,h3{font-family:'Space Grotesk', sans-serif; margin:0;}
+
+  /* Fondo de imagen reutilizable: cualquier elemento con la clase
+     "con-fondo" pinta la imagen guardada en su variable --fondo-img
+     detrás de un velo claro para que el texto siga siendo legible. */
+  .con-fondo{
+    background-image:
+      linear-gradient(180deg, rgba(243,247,252,.16), rgba(243,247,252,.22)),
+      var(--fondo-img);
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+  }
+
+  .grid-overlay{
+    position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0/40px 40px;
+    opacity:.8;
+  }
+
+  /* ---------- Capa de fondo fija al tamaño de pantalla ----------
+     A diferencia de poner el fondo directamente en cada <section>
+     (cuyo alto cambia según cuánto contenido tenga: nivel difícil
+     tiene más tarjetas que fácil), esta capa siempre mide el
+     tamaño real de la ventana (position:fixed + inset:0), así que
+     el "cover" se calcula sobre la pantalla y no sobre un alto
+     variable. Por eso ya no hace falta hacer zoom manual: siempre
+     encaja solo, sea cual sea el nivel o cuánto contenido haya. */
+  .bg-layer{
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-size:cover;background-position:center;background-repeat:no-repeat;
+    opacity:0;transition:opacity .25s ease;
+  }
+  .bg-layer.visible{opacity:1;}
+  .bg-layer.bg-welcome{
+    background-image:
+      radial-gradient(ellipse 90% 70% at 50% 20%, rgba(255,255,255,.16), rgba(255,255,255,.05) 65%),
+      var(--fondo-img);
+  }
+  .bg-layer.bg-levels{
+    background-image:
+      radial-gradient(ellipse 90% 70% at 50% 20%, rgba(255,255,255,.2), rgba(255,255,255,.06) 65%),
+      var(--fondo-img);
+  }
+  .bg-layer.bg-game{
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.18), rgba(243,247,252,.24)),
+      var(--fondo-img);
+  }
+
+  /* ---------- Traveling current trace (one orchestrated ambient effect) ---------- */
+  .trace-layer{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.7;}
+  .trace-layer path{fill:none;stroke:var(--border-soft);stroke-width:1.4;}
+  .trace-layer .pulse{stroke:var(--iec);stroke-width:2;stroke-linecap:round;
+    stroke-dasharray:6 900;filter:drop-shadow(0 0 5px rgba(232,89,12,.7));
+    animation:travel 7s linear infinite;}
+  .trace-layer .pulse.alt{stroke:var(--nema);stroke-dasharray:5 900;animation-duration:9s;animation-delay:2.4s;
+    filter:drop-shadow(0 0 5px rgba(11,114,133,.7));}
+  @keyframes travel{ to{ stroke-dashoffset:-900; } }
+
+  /* ---------- Screens ---------- */
+  .screen{display:none;position:relative;z-index:1;min-height:100vh;min-height:100dvh;}
+  .screen.active{display:flex;flex-direction:column;animation:fadeIn .4s ease-out;}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+
+  /* ---------- Welcome screen ---------- */
+  #screen-welcome{
+    justify-content:center;align-items:center;text-align:center;
+    padding:40px 20px;
+    background:
+      radial-gradient(ellipse 70% 50% at 18% 8%, rgba(232,89,12,.16), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 85% 85%, rgba(11,114,133,.14), transparent 55%),
+      radial-gradient(ellipse 90% 60% at 50% 15%, #FFFFFF 0%, var(--bg) 70%);
+  }
+  /* Cuando FONDOS.bienvenida tiene una imagen, la foto ya no se pinta
+     aquí (eso ahora lo hace .bg-layer, fija al tamaño de pantalla);
+     esta sección solo se vuelve transparente para dejarla ver detrás. */
+  #screen-welcome.con-fondo{
+    background:transparent;background-image:none;
+  }
+  /* Con foto de fondo, la tarjeta principal se vuelve un "cristal"
+     translúcido con desenfoque: se ve la foto detrás pero el texto
+     sigue siendo perfectamente legible. */
+  #screen-welcome.con-fondo .hero-card{
+    background:rgba(255,255,255,.82);
+    backdrop-filter:blur(14px) saturate(150%);
+    -webkit-backdrop-filter:blur(14px) saturate(150%);
+  }
+  .hero-card{
+    background:#FFFFFF;
+    border-radius:22px;
+    padding:50px clamp(24px,5vw,68px) 44px;
+    max-width:740px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 30px 70px -24px rgba(19,35,64,.45);
+  }
+  /* Franja de acento arriba de la tarjeta, con los dos colores de marca */
+  .hero-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:6px;
+    background:linear-gradient(90deg, var(--iec), #F0924A 45%, var(--nema));
+  }
+  .badge{
+    display:inline-flex;align-items:center;gap:8px;
+    border:1px solid var(--border);border-radius:999px;
+    padding:6px 16px;font-size:11px;letter-spacing:.05em;color:var(--muted);
+    background:var(--panel-2);
+    margin-bottom:24px;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .hero-title{
+    font-family:'Space Grotesk',sans-serif;font-weight:800;
+    font-size:clamp(30px,5vw,50px);line-height:1.15;
+    color:var(--text);
+    max-width:640px;
+    margin:0 auto;
+  }
+  .hero-title .accent{color:var(--iec);}
+  .hero-sub{
+    margin:18px auto 0;color:var(--muted);font-size:15px;max-width:520px;line-height:1.6;
+  }
+  .start-btn{
+    margin-top:34px;position:relative;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;
+    padding:15px 38px;border-radius:12px;
+    border:none;color:#fff;
+    background:linear-gradient(135deg, var(--iec), #D9480F);
+    cursor:pointer;letter-spacing:.02em;
+    box-shadow:0 14px 30px -12px rgba(232,89,12,.55);
+    transition:transform .15s, box-shadow .2s, filter .2s;
+  }
+  .start-btn:hover{filter:brightness(1.06);box-shadow:0 16px 38px -10px rgba(232,89,12,.65);transform:translateY(-2px);}
+  .hero-foot{margin-top:38px;font-size:11px;color:var(--muted);letter-spacing:.04em;opacity:.75;}
+
+
+  /* ---------- Level select screen ---------- */
+  #screen-levels{justify-content:center;align-items:center;padding:40px 20px;}
+  /* Igual que en la pantalla de bienvenida: la foto la pinta .bg-layer
+     (fija al tamaño de pantalla); aquí solo se vuelve transparente. */
+  #screen-levels.con-fondo{
+    background:transparent;background-image:none;
+  }
+  /* Texto legible sobre la foto sin taparla con un panel sólido.
+     Cada texto lleva su propia "placa" translúcida (mismo lenguaje
+     visual que el badge y la tarjeta de bienvenida) para que se lea
+     bien sin importar qué haya justo detrás en la foto. */
+  #screen-levels.con-fondo .levels-head{
+    background:rgba(255,255,255,.9);
+    box-shadow:0 26px 64px -26px rgba(19,35,64,.5), inset 0 1px 0 rgba(255,255,255,.8);
+  }
+  .levels-wrap{max-width:920px;width:100%;text-align:center;}
+
+  /* Panel de cabecera "Elige tu nivel": una sola placa de vidrio con
+     etiqueta, título en degradado y línea decorativa animada, en vez
+     de dos placas sueltas. */
+  .levels-head{
+    position:relative;z-index:1;
+    display:inline-flex;flex-direction:column;align-items:center;
+    padding:30px 44px 28px;margin:0 auto 36px;
+    border-radius:20px;
+    background:var(--panel-glass);
+    backdrop-filter:blur(14px) saturate(160%);
+    -webkit-backdrop-filter:blur(14px) saturate(160%);
+    border:1.5px solid var(--border-soft);
+    box-shadow:0 24px 56px -30px rgba(19,35,64,.32), inset 0 1px 0 rgba(255,255,255,.7);
+    overflow:hidden;
+  }
+  .levels-head::before{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(circle at 10% -10%, rgba(232,89,12,.16), transparent 55%),
+      radial-gradient(circle at 90% 115%, rgba(11,114,133,.16), transparent 55%);
+  }
+  .levels-eyebrow{
+    position:relative;display:inline-flex;align-items:center;gap:8px;
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--iec);
+    padding:6px 15px;margin-bottom:16px;border-radius:999px;
+    background:var(--iec-dim);border:1px solid rgba(232,89,12,.3);
+  }
+  .levels-eyebrow .dot{
+    width:6px;height:6px;border-radius:50%;background:var(--iec);
+    animation:eyebrowPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes eyebrowPulse{
+    0%{box-shadow:0 0 0 0 rgba(232,89,12,.5);}
+    70%{box-shadow:0 0 0 7px rgba(232,89,12,0);}
+    100%{box-shadow:0 0 0 0 rgba(232,89,12,0);}
+  }
+  .levels-wrap h2{
+    position:relative;font-size:clamp(28px,4.4vw,40px);margin-bottom:12px;
+    letter-spacing:-.01em;
+    background:linear-gradient(120deg, var(--text) 0%, var(--iec) 55%, var(--nema) 100%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .levels-wrap p.lead{
+    position:relative;color:var(--muted);font-size:14px;line-height:1.65;
+    max-width:440px;margin:0;
+  }
+  .levels-divider{
+    position:relative;width:64px;height:3px;border-radius:3px;margin-top:18px;
+    background:linear-gradient(90deg, var(--ok), var(--iec), var(--bad), var(--ok));
+    background-size:250% 100%;
+    animation:dividerShift 3.2s linear infinite;
+  }
+  @keyframes dividerShift{
+    0%{background-position:0% 0;}
+    100%{background-position:250% 0;}
+  }
+  .level-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
+  @media (max-width:760px){.level-cards{grid-template-columns:1fr;}}
+  .level-card{
+    border:1.5px solid var(--border);border-radius:14px;
+    background:linear-gradient(180deg,#ffffff,var(--panel-2));
+    padding:28px 20px;cursor:pointer;text-align:left;position:relative;overflow:hidden;
+    transition:transform .18s, border-color .18s, box-shadow .18s;
+    box-shadow:0 10px 30px -20px rgba(19,35,64,.25);
+  }
+  .level-card::before,.level-card::after{content:'';position:absolute;width:12px;height:12px;opacity:0;transition:opacity .18s;pointer-events:none;}
+  .level-card::before{top:8px;left:8px;border-top:2px solid currentColor;border-left:2px solid currentColor;}
+  .level-card::after{bottom:8px;right:8px;border-bottom:2px solid currentColor;border-right:2px solid currentColor;}
+  .level-card:hover::before,.level-card:hover::after{opacity:.9;}
+  .level-card:hover{transform:translateY(-5px);box-shadow:0 20px 44px -22px rgba(19,35,64,.35);}
+  .level-card[data-level="facil"]{color:var(--ok);}
+  .level-card[data-level="medio"]{color:var(--iec);}
+  .level-card[data-level="dificil"]{color:var(--bad);}
+  .level-card[data-level="facil"]:hover{border-color:var(--ok);}
+  .level-card[data-level="medio"]:hover{border-color:var(--iec);}
+  .level-card[data-level="dificil"]:hover{border-color:var(--bad);}
+  .level-card .lvl-icon{margin-bottom:14px;display:block;filter:drop-shadow(0 2px 6px currentColor);}
+  .level-card .lvl-icon svg{display:block;width:30px;height:30px;}
+  .level-card h3{font-size:19px;margin-bottom:8px;color:currentColor;}
+  .level-card .meta{font-size:12px;color:var(--muted);line-height:1.7;}
+  .level-card .meta b{color:var(--text);}
+  .back-link{
+    margin-top:30px;background:none;border:none;color:var(--muted);
+    font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;text-decoration:underline;
+  }
+  .back-link:hover{color:var(--text);}
+
+  /* Miniatura de fondo dentro de cada tarjeta de nivel (la pones
+     tú desde FONDOS en el <script>, el usuario no la elige). */
+  .level-card.con-fondo{
+    background-image:
+      linear-gradient(180deg, rgba(255,255,255,.3), rgba(255,255,255,.8) 82%),
+      var(--fondo-img);
+    background-size:cover;background-position:center;background-repeat:no-repeat;
+  }
+
+  /* ---------- Game screen (shared panel/card styles) ---------- */
+  #screen-game{padding:28px 16px 60px;align-items:center;background:var(--bg);}
+  /* La foto (fondo del nivel elegido) la pinta .bg-layer, fija al tamaño
+     de pantalla real, no al alto de esta sección (que crece según
+     cuántos símbolos tenga el nivel). Así siempre encaja sin zoom. */
+  #screen-game.con-fondo{
+    background:transparent;background-image:none;
+  }
+  /* Panel, tablero y tarjetas se vuelven "cristal esmerilado": se ve
+     la foto de fondo detrás (nítida, sin taparla), y el texto sigue
+     siendo legible gracias al desenfoque (backdrop-filter). Las
+     tarjetas ya emparejadas (.locked) no entran aquí para que
+     conserven su color verde de acierto. */
+  #screen-game.con-fondo .panel,
+  #screen-game.con-fondo .stage{
+    background:rgba(255,255,255,.6);
+    backdrop-filter:blur(16px) saturate(150%);
+    -webkit-backdrop-filter:blur(16px) saturate(150%);
+  }
+  #screen-game.con-fondo .card:not(.locked){
+    background:rgba(255,255,255,.62);
+    backdrop-filter:blur(8px) saturate(140%);
+    -webkit-backdrop-filter:blur(8px) saturate(140%);
+  }
+  /* Respaldo para navegadores sin soporte de backdrop-filter: en ese
+     caso sí usamos un panel casi sólido para que el texto no pierda
+     legibilidad (ahí no hay desenfoque que lo proteja). */
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    #screen-game.con-fondo .panel,
+    #screen-game.con-fondo .stage{ background:rgba(255,255,255,.92); }
+    #screen-game.con-fondo .card:not(.locked){ background:rgba(255,255,255,.9); }
+  }
+  .wrap{max-width:980px;width:100%;margin:0 auto;}
+  .panel{
+    position:relative;border:1.5px solid var(--border);background:var(--panel);
+    border-radius:var(--radius);padding:16px 18px;margin-bottom:18px;
+    box-shadow:0 14px 34px -24px rgba(19,35,64,.3), inset 0 1px 0 rgba(255,255,255,.6);
+    display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+  }
+  .panel::before{content:'';position:absolute;top:0;left:16px;right:16px;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);}
+  .lvl-pill{
+    display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);
+    border:1px solid var(--border);border-radius:8px;padding:7px 12px;background:var(--panel-2);
+  }
+  .lvl-pill b{color:var(--iec);}
+  .btn{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;
+    padding:9px 16px;border-radius:8px;border:1.5px solid var(--border);
+    background:#fff;color:var(--muted);cursor:pointer;
+    transition:background .15s,color .15s,box-shadow .15s,border-color .15s;
+  }
+  .btn:hover{border-color:var(--iec);color:var(--iec);}
+  .btn.primary{border-color:var(--iec);color:var(--iec);}
+  .btn.primary:hover{background:var(--iec);color:#fff;box-shadow:0 10px 26px -8px rgba(232,89,12,.55);}
+  .btn.success{border-color:var(--ok);color:var(--ok);background:var(--ok-dim);}
+  .btn.success:hover{background:var(--ok);color:#fff;box-shadow:0 10px 26px -8px rgba(20,153,84,.5);}
+  .btn.success:disabled{opacity:.45;cursor:default;background:var(--ok-dim);color:var(--ok);box-shadow:none;}
+
+  .readouts{display:flex;gap:10px;margin-left:auto;}
+  .readout{background:var(--panel-2);border:1.5px solid var(--border);border-radius:8px;padding:6px 16px;text-align:center;min-width:70px;}
+  .readout .val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--iec);}
+  .readout.time{border-color:#F3C58A;}
+  .readout.time .val{color:#C2660A;}
+  .readout.ok{border-color:var(--ok-dim);}
+  .readout.ok .val{color:var(--ok);}
+  .readout.bad{border-color:var(--bad-dim);}
+  .readout.bad .val{color:var(--bad);}
+  .readout .lbl{font-size:9px;color:var(--muted);margin-top:3px;}
+
+  .stage{
+    border:1.5px solid var(--border);
+    background:radial-gradient(circle at 100% 0%, rgba(11,114,133,.06), transparent 45%), var(--panel);
+    border-radius:var(--radius);padding:22px;min-height:360px;position:relative;width:100%;
+    box-shadow:0 20px 46px -28px rgba(19,35,64,.3);
+    animation:fadeIn .35s ease-out;
+  }
+  .stage::before,.stage::after{content:'';position:absolute;width:14px;height:14px;opacity:.9;pointer-events:none;}
+  .stage::before{top:8px;left:8px;border-top:2px solid var(--iec);border-left:2px solid var(--iec);}
+  .stage::after{bottom:8px;right:8px;border-bottom:2px solid var(--nema);border-right:2px solid var(--nema);}
+
+  /* Tablero "en espera": las tarjetas ya están armadas pero bloqueadas
+     hasta que el jugador pulse "Iniciar ronda" (el cronómetro tampoco
+     corre todavía). */
+  .stage.not-started .drag-grid{pointer-events:none;user-select:none;}
+  .stage.not-started::after{opacity:0;}
+  .stage-startgate{
+    position:absolute;inset:0;z-index:2;display:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:rgba(243,247,252,.32);border-radius:var(--radius);
+  }
+  .stage.not-started .stage-startgate{display:flex;}
+  .stage-startgate .btn{padding:12px 26px;font-size:14px;}
+
+  .drag-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;}
+  @media (max-width:640px){.drag-grid{grid-template-columns:1fr;}}
+  .col-title{font-size:11px;color:var(--muted);margin-bottom:10px;text-align:center;letter-spacing:.03em;}
+
+  .card{
+    border:1.5px solid var(--border);background:linear-gradient(180deg, #ffffff, var(--panel-2));
+    border-radius:8px;padding:10px;margin-bottom:10px;
+    display:flex;align-items:center;justify-content:center;height:84px;
+    touch-action:none;user-select:none;position:relative;
+    transition:border-color .15s, box-shadow .15s, transform .12s, background .2s;
+  }
+  .symbol-card{cursor:grab;border-left:3px solid var(--iec);}
+  .symbol-card:hover:not(.locked){transform:translateY(-2px);box-shadow:0 10px 22px -14px rgba(19,35,64,.4);}
+  .symbol-card.picked{border-color:var(--iec);box-shadow:0 0 0 2px var(--iec-dim),0 8px 20px -8px rgba(232,89,12,.35);z-index:5;}
+  .symbol-card.dragging{position:fixed;z-index:50;pointer-events:none;box-shadow:0 12px 30px rgba(19,35,64,.35);}
+  .symbol-card img{max-width:88%;max-height:70px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(19,35,64,.12));}
+  .symbol-card .fallback{font-size:10px;color:var(--muted);text-align:center;line-height:1.4;padding:0 6px;}
+  .symbol-card.locked{border-color:var(--ok);border-left-color:var(--ok);background:linear-gradient(180deg,var(--ok-dim),#eafbf1);cursor:default;}
+
+  .name-slot{font-size:12.5px;line-height:1.3;padding:0 10px;text-align:center;color:var(--text);border-style:dashed;cursor:pointer;}
+  .name-slot:hover:not(.locked){border-color:var(--nema);}
+  .name-slot.locked{border-color:var(--ok);border-style:solid;background:linear-gradient(180deg,var(--ok-dim),#eafbf1);color:var(--ok);}
+  .name-slot.shake{animation:shake .3s;border-color:var(--bad);}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+
+  .summary{
+    position:absolute;inset:0;background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.98), rgba(243,247,252,.98));
+    border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;gap:10px;animation:fadeIn .3s ease-out;overflow:hidden;
+  }
+  .summary .big{font-family:'Space Grotesk',sans-serif;font-size:48px;font-weight:700;color:var(--iec);}
+  .summary.perfect .big{color:var(--ok);}
+  .summary h3{color:var(--text);}
+  .summary p{color:var(--muted);font-size:13px;max-width:420px;}
+  .summary .actions{display:flex;gap:10px;margin-top:8px;}
+
+  .spark{position:absolute;top:50%;left:50%;width:6px;height:6px;border-radius:50%;pointer-events:none;
+    animation:spark-burst .9s ease-out forwards;}
+  @keyframes spark-burst{
+    to{ transform:translate(var(--dx),var(--dy)) scale(0); opacity:0; }
+  }
+
+  footer{text-align:center;color:var(--muted);font-size:11px;margin-top:26px;letter-spacing:.03em;opacity:.8;}
+  footer span{color:var(--nema);}
+
+  /* Los fondos de imagen ya NO se configuran aquí en CSS.
+     Ahora se ponen en un solo lugar, muy simple, dentro de
+     <script> — busca el bloque "const FONDOS = {...}". */
+</style>
+</head>
+<body>
+<div class="grid-overlay"></div>
+<svg class="trace-layer" preserveAspectRatio="none" viewBox="0 0 1000 1000">
+  <path id="tracePathA" d="M0,120 L260,120 L260,40 L620,40 L620,180 L1000,180"/>
+  <path id="tracePathB" d="M0,860 L340,860 L340,940 L720,940 L720,760 L1000,760"/>
+  <use href="#tracePathA" class="pulse"/>
+  <use href="#tracePathB" class="pulse alt"/>
+</svg>
+<div class="bg-layer" id="bgLayer"></div>
+
+<!-- ============ SCREEN 1: WELCOME ============ -->
+<section id="screen-welcome" class="screen active">
+  <div class="hero-card">
+    <div class="badge"><span class="dot"></span> UNSA · Escuela Profesional de Ingeniería Electrónica</div>
+    <h1 class="hero-title">Bienvenido a la prueba de <span class="accent">símbolos IEC</span></h1>
+    <p class="hero-sub">Pon a prueba tu reconocimiento de simbología eléctrica bajo la norma IEC 60617. Arrastra cada símbolo hasta su nombre correcto antes de que se acabe el tiempo.</p>
+    <button class="start-btn" id="goLevels">Haz clic aquí para empezar →</button>
+    <div class="hero-foot">Accionamientos / Instalaciones Eléctricas — laboratorio de simbología</div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2: LEVEL SELECT ============ -->
+<section id="screen-levels" class="screen">
+  <div class="levels-wrap">
+    <div class="levels-head">
+      <span class="levels-eyebrow"><span class="dot"></span>Selecciona tu desafío</span>
+      <h2>Elige tu nivel</h2>
+      <p class="lead">Cada nivel cambia la cantidad de símbolos y el tiempo disponible.</p>
+      <span class="levels-divider"></span>
+    </div>
+    <div class="level-cards">
+      <div class="level-card" data-level="facil">
+        <span class="lvl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4"/><path d="M17 12h4"/><circle cx="12" cy="12" r="5"/><path d="M9.5 12l1.7 1.7L15 10"/></svg></span>
+        <h3>Fácil</h3>
+        <div class="meta"><b>6</b> símbolos<br><b>60</b> segundos</div>
+      </div>
+      <div class="level-card" data-level="medio">
+        <span class="lvl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4"/><path d="M17 12h4"/><path d="M7 12l3-6 4 12 3-6h3"/></svg></span>
+        <h3>Medio</h3>
+        <div class="meta"><b>8</b> símbolos<br><b>60</b> segundos</div>
+      </div>
+      <div class="level-card" data-level="dificil">
+        <span class="lvl-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4"/><path d="M17 12h4"/><path d="M7 6l3 6h-2l3 6 3-7h-2l2-5"/></svg></span>
+        <h3>Difícil</h3>
+        <div class="meta"><b>12</b> símbolos<br><b>60</b> segundos</div>
+      </div>
+    </div>
+
+    <button class="back-link" id="backWelcome">← Volver al inicio</button>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3: GAME ============ -->
+<section id="screen-game" class="screen">
+  <div class="wrap">
+    <div class="panel">
+      <div class="lvl-pill">Nivel: <b id="lvlLabel">—</b></div>
+      <button class="btn" id="changeLevelBtn">Cambiar nivel</button>
+      <button class="btn success" id="startBtn">Iniciar ronda</button>
+      <button class="btn primary" id="restartBtn">Reiniciar ronda</button>
+      <div class="readouts">
+        <div class="readout time"><div class="val" id="rTime">60</div><div class="lbl">seg</div></div>
+        <div class="readout ok"><div class="val" id="rOk">0</div><div class="lbl">aciertos</div></div>
+        <div class="readout bad"><div class="val" id="rBad">0</div><div class="lbl">errores</div></div>
+      </div>
+    </div>
+    <div class="stage" id="stage"></div>
+    <footer>Prueba de simbología eléctrica <span>·</span> norma IEC 60617</footer>
+  </div>
+</section>
+
+<script>
+/* ============================================================
+   FONDOS DE PANTALLA — AQUÍ los pones tú, el usuario no elige nada.
+   Escribe la ruta o URL de tu imagen entre las comillas ''.
+   Si dejas las comillas vacías '', esa pantalla no lleva fondo.
+
+   Ejemplo:
+     bienvenida: 'images/fondo-inicio.jpg',
+   ============================================================ */
+const FONDOS = {
+  bienvenida: 'images/unsa-fondo.png',   // pantalla de inicio ("Haz clic aquí para empezar")
+  niveles:    'images/sxx.jpg',   // pantalla "Elige tu nivel" (fondo general de la página)
+  facil:      'images/facil.jpg',   // fondo del juego + miniatura de la tarjeta "Fácil"
+  medio:      'images/medio.jpg',   // fondo del juego + miniatura de la tarjeta "Medio"
+  dificil:    'images/dificil.jpg'    // fondo del juego + miniatura de la tarjeta "Difícil"
+};
+
+/* Aplica (o quita) una imagen de fondo a un elemento pequeño (por
+   ejemplo la miniatura de una tarjeta de nivel). No lo toques,
+   solo edita el objeto FONDOS de arriba. */
+function aplicarFondo(el, ruta){
+  if(!el) return;
+  if(ruta){
+    el.style.setProperty('--fondo-img', `url('${ruta}')`);
+    el.classList.add('con-fondo');
+  }else{
+    el.style.removeProperty('--fondo-img');
+    el.classList.remove('con-fondo');
+  }
+}
+
+/* Actualiza la capa de fondo fija a pantalla completa (#bgLayer) según
+   qué pantalla está activa ahora mismo. Como esta capa siempre mide el
+   tamaño real de la ventana, el fondo encaja solo, sin necesidad de
+   hacer zoom, sin importar el nivel ni cuánto contenido tenga. */
+function actualizarFondoPantalla(screenId){
+  const bgLayer = document.getElementById('bgLayer');
+  const screenEl = document.getElementById(screenId);
+  if(!bgLayer || !screenEl) return;
+
+  let ruta = '', tint = '';
+  if(screenId === 'screen-welcome'){ ruta = FONDOS.bienvenida; tint = 'bg-welcome'; }
+  else if(screenId === 'screen-levels'){ ruta = FONDOS.niveles; tint = 'bg-levels'; }
+  else if(screenId === 'screen-game'){ ruta = FONDOS[state.level]; tint = 'bg-game'; }
+
+  if(ruta){
+    bgLayer.style.setProperty('--fondo-img', `url('${ruta}')`);
+    bgLayer.className = 'bg-layer visible ' + tint;
+    screenEl.classList.add('con-fondo');
+  }else{
+    bgLayer.classList.remove('visible');
+    screenEl.classList.remove('con-fondo');
+  }
+}
+
+/* ---------- Symbol data: id + name + image path (your own images) ---------- */
+/* Coloca tus imágenes en una carpeta "images/iec/" junto a este archivo, */
+/* con estos nombres exactos (png, jpg o svg funcionan igual). */
+const SYMBOLS = [
+  { id:'contacto-na',         name:'Contacto normalmente abierto ' },
+  { id:'contacto-nc',         name:'Contacto normalmente cerrado ' },
+  { id:'bobina',              name:'Bobina de relé' },
+  { id:'transformador V'  ,   name:'Transformador de voltaje' },
+  { id:'transformador C',     name:'Transformador de corriente' },
+  { id:'motor paso a paso',   name:'Motor paso a paso' },
+  { id:'temporizador co',     name:'Temporizador a la conexion' },
+  { id:'temporizador desco',  name:'Temporizador a la desconexion' },
+  { id:'lampara',             name:'Lámpara' },
+  { id:'rele termico',        name:'Relé térmico ' },
+  { id:'fusible',             name:'Fusible' },
+  { id:'tierra',              name:'Tierra ' },
+  { id:'disyuntor',           name:'Disyuntor' },
+  { id:'convertidor DC DC',   name:'Convertidor (DC/DC)' },
+  { id:'capacitor',           name:'Capacitor' },
+  { id:'osciloscopio',        name:'Osciloscopio' },
+  { id:'contador impulsos',   name:'Contador de impulsos' },
+  { id:'resistencia va',      name:'Resistencia variable' },
+  { id:'interruptor dife',    name:'Interruptor diferencial' },
+  { id:'interruptor termo',   name:'Interruptor termomagnetico' },
+  { id:'motor tri',           name:'Motor trifasico' },
+  { id:'material semi',       name:'Material semiconductor' },
+  { id:'defectos aislami',    name:'Defectos de aislamiento' },
+];
+function imgPath(id){ return 'images/iec/' + id + '.png'; }
+
+const LEVELS = {
+  facil:   { label:'Fácil',   count:6,  time:60 },
+  medio:   { label:'Medio',   count:8,  time:60 },
+  dificil: { label:'Difícil', count:12, time:60 }
+};
+
+let state = { level:'medio', round:[], picked:null, ok:0, bad:0, timeLeft:60, timer:null };
+
+/* ---------- Screen navigation ---------- */
+function showScreen(id, pushHistory){
+  if(typeof removeGhost === 'function') removeGhost();
+  if(pushHistory === undefined) pushHistory = true;
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  actualizarFondoPantalla(id);
+  window.scrollTo(0,0);
+  if(pushHistory) history.pushState({screen:id}, '', '#'+id.replace('screen-',''));
+}
+
+/* Deja que el botón "Atrás" del navegador funcione entre pantallas */
+history.replaceState({screen:'screen-welcome'}, '', '#welcome');
+window.addEventListener('popstate', (e)=>{
+  const id = (e.state && e.state.screen) ? e.state.screen : 'screen-welcome';
+  if(id !== 'screen-game') clearInterval(state.timer);
+  showScreen(id, false);
+});
+
+document.getElementById('goLevels').addEventListener('click', ()=> showScreen('screen-levels'));
+document.getElementById('backWelcome').addEventListener('click', ()=> showScreen('screen-welcome'));
+document.getElementById('changeLevelBtn').addEventListener('click', ()=>{
+  clearInterval(state.timer);
+  showScreen('screen-levels');
+});
+document.querySelectorAll('.level-card').forEach(card=>{
+  card.addEventListener('click', ()=>{
+    state.level = card.dataset.level;
+    document.getElementById('lvlLabel').textContent = LEVELS[state.level].label;
+    const gameEl = document.getElementById('screen-game');
+    gameEl.classList.remove('level-facil','level-medio','level-dificil');
+    gameEl.classList.add('level-' + state.level);
+    /* showScreen ya llama a actualizarFondoPantalla, que pinta el fondo
+       del nivel elegido (state.level) en la capa fija #bgLayer */
+    showScreen('screen-game');
+    prepareRound();
+  });
+});
+document.getElementById('startBtn').addEventListener('click', beginRound);
+document.getElementById('restartBtn').addEventListener('click', prepareRound);
+
+/* ---------- Pone los fondos configurados arriba, apenas carga la página ---------- */
+(function inicializarFondos(){
+  actualizarFondoPantalla('screen-welcome'); // pantalla activa al inicio
+  document.querySelectorAll('.level-card').forEach(card=>{
+    aplicarFondo(card, FONDOS[card.dataset.level]);
+  });
+})();
+
+function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+/* ---------- Round setup ---------- */
+/* Arma un tablero nuevo pero lo deja "en espera": el cronómetro no
+   corre y las tarjetas están bloqueadas hasta pulsar "Iniciar ronda". */
+function prepareRound(){
+  clearInterval(state.timer);
+  state.ok=0; state.bad=0; state.picked=null;
+  document.getElementById('rOk').textContent='0';
+  document.getElementById('rBad').textContent='0';
+
+  const cfg = LEVELS[state.level];
+  state.round = shuffle(SYMBOLS).slice(0, cfg.count);
+  state.timeLeft = cfg.time;
+  document.getElementById('rTime').textContent = state.timeLeft;
+
+  renderDrag();
+
+  const stage = document.getElementById('stage');
+  stage.classList.add('not-started');
+  stage.insertAdjacentHTML('beforeend', `<div class="stage-startgate">
+    <button class="btn success" onclick="beginRound()">▶ Iniciar ronda</button>
+  </div>`);
+}
+
+/* Arranca (o reanuda) el cronómetro sobre el tablero ya armado. */
+function beginRound(){
+  const stage = document.getElementById('stage');
+  stage.classList.remove('not-started');
+  const gate = stage.querySelector('.stage-startgate');
+  if(gate) gate.remove();
+
+  clearInterval(state.timer);
+  state.timer = setInterval(()=>{
+    state.timeLeft--;
+    document.getElementById('rTime').textContent = Math.max(state.timeLeft,0);
+    if(state.timeLeft<=0){ clearInterval(state.timer); endRound(); }
+  },1000);
+}
+
+/* "Reiniciar ronda": arma un tablero nuevo y lo arranca de inmediato. */
+function startRound(){
+  prepareRound();
+  beginRound();
+}
+
+function renderDrag(){
+  if(typeof removeGhost === 'function') removeGhost();
+  const stage = document.getElementById('stage');
+  const symbolsShuffled = shuffle(state.round);
+  const namesShuffled = shuffle(state.round);
+  stage.innerHTML = `<div class="drag-grid">
+    <div><div class="col-title">Símbolos IEC</div><div id="symCol"></div></div>
+    <div><div class="col-title">Nombres</div><div id="nameCol"></div></div>
+  </div>`;
+  const symCol = document.getElementById('symCol');
+  const nameCol = document.getElementById('nameCol');
+
+  symbolsShuffled.forEach(item=>{
+    const el = document.createElement('div');
+    el.className='card symbol-card';
+    el.dataset.id=item.id;
+    el.innerHTML = `<img src="${imgPath(item.id)}" alt="${item.name}"
+      onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'fallback',textContent:'${item.name.replace(/'/g,"\\'")}'}))">`;
+    symCol.appendChild(el);
+    el.addEventListener('pointerdown', ()=> pickCard(el, item.id));
+  });
+
+  namesShuffled.forEach(item=>{
+    const el = document.createElement('div');
+    el.className='card name-slot';
+    el.dataset.id=item.id;
+    el.textContent=item.name;
+    el.addEventListener('click', ()=> tryMatch(el, item.id));
+    nameCol.appendChild(el);
+  });
+}
+
+function pickCard(el, id){
+  if(el.classList.contains('locked')) return;
+  document.querySelectorAll('.symbol-card.picked').forEach(c=>c.classList.remove('picked'));
+  state.picked = id;
+  el.classList.add('picked');
+}
+
+function tryMatch(slotEl, slotId){
+  if(!state.picked || slotEl.classList.contains('locked')) return;
+  const cardEl = document.querySelector('.symbol-card[data-id="'+state.picked+'"]');
+  if(state.picked === slotId){
+    cardEl.classList.remove('picked');
+    cardEl.classList.add('locked');
+    slotEl.classList.add('locked');
+    state.picked=null;
+    state.ok++;
+    document.getElementById('rOk').textContent=state.ok;
+    burstSparks(slotEl, 'var(--ok)');
+    if(document.querySelectorAll('.symbol-card.locked').length === state.round.length){
+      clearInterval(state.timer); endRound();
+    }
+  } else {
+    state.bad++;
+    document.getElementById('rBad').textContent=state.bad;
+    slotEl.classList.add('shake');
+    setTimeout(()=> slotEl.classList.remove('shake'), 300);
+  }
+}
+
+function burstSparks(anchorEl, color){
+  const rect = anchorEl.getBoundingClientRect();
+  const stage = document.getElementById('stage');
+  const stageRect = stage.getBoundingClientRect();
+  for(let i=0;i<8;i++){
+    const s = document.createElement('div');
+    s.className='spark';
+    const angle = (Math.PI*2*i)/8;
+    s.style.setProperty('--dx', Math.cos(angle)*46+'px');
+    s.style.setProperty('--dy', Math.sin(angle)*46+'px');
+    s.style.left = (rect.left - stageRect.left + rect.width/2)+'px';
+    s.style.top = (rect.top - stageRect.top + rect.height/2)+'px';
+    s.style.background = color;
+    stage.appendChild(s);
+    setTimeout(()=> s.remove(), 950);
+  }
+}
+
+function endRound(){
+  const stage = document.getElementById('stage');
+  const total = state.round.length;
+  const pct = total? Math.round((state.ok/total)*100) : 0;
+  const overlay = document.createElement('div');
+  overlay.className='summary'+(pct===100?' perfect':'');
+  overlay.innerHTML = `
+    <div class="big">${pct}%</div>
+    <h3>${state.ok} de ${total} correctos</h3>
+    <p>Errores: ${state.bad} · Nivel: ${LEVELS[state.level].label}</p>
+    <div class="actions">
+      <button class="btn primary" onclick="startRound()">Jugar de nuevo</button>
+      <button class="btn" onclick="document.getElementById('changeLevelBtn').click()">Cambiar nivel</button>
+    </div>
+  `;
+  stage.appendChild(overlay);
+  if(pct===100){
+    const colors=['var(--ok)','var(--iec)','var(--nema)','#C2660A'];
+    for(let i=0;i<26;i++){
+      const s=document.createElement('div');
+      s.className='spark';
+      const angle=Math.random()*Math.PI*2;
+      const dist=60+Math.random()*140;
+      s.style.setProperty('--dx', Math.cos(angle)*dist+'px');
+      s.style.setProperty('--dy', Math.sin(angle)*dist+'px');
+      s.style.left='50%'; s.style.top='38%';
+      s.style.background=colors[i%colors.length];
+      s.style.animationDelay=(Math.random()*.2)+'s';
+      overlay.appendChild(s);
+      setTimeout(()=> s.remove(), 1200);
+    }
+  }
+}
+
+/* ---------- Pointer-based dragging visuals (desktop + touch) ---------- */
+let dragGhost=null;
+function removeGhost(){
+  if(dragGhost){ dragGhost.remove(); dragGhost=null; }
+}
+document.addEventListener('pointerdown', (e)=>{
+  const card = e.target.closest('.symbol-card');
+  if(!card || card.classList.contains('locked')) return;
+  removeGhost(); // por si quedó uno huérfano de un gesto anterior interrumpido
+  dragGhost = card.cloneNode(true);
+  dragGhost.classList.add('dragging');
+  dragGhost.style.width = card.offsetWidth+'px';
+  dragGhost.style.height = card.offsetHeight+'px';
+  document.body.appendChild(dragGhost);
+  moveGhost(e);
+});
+document.addEventListener('pointermove', (e)=>{ if(dragGhost) moveGhost(e); });
+document.addEventListener('pointerup', (e)=>{
+  if(!dragGhost) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const slot = el ? el.closest('.name-slot') : null;
+  if(slot) tryMatch(slot, slot.dataset.id);
+  removeGhost();
+});
+/* pointercancel se dispara en vez de pointerup cuando el navegador
+   interrumpe el gesto (scroll táctil, multitouch, cambio de pantalla,
+   etc.). Sin este listener el fantasma se quedaba flotando para
+   siempre — es el bug de la tarjeta duplicada pegada en pantalla. */
+document.addEventListener('pointercancel', removeGhost);
+window.addEventListener('blur', removeGhost);
+function moveGhost(e){
+  dragGhost.style.left = (e.clientX - dragGhost.offsetWidth/2)+'px';
+  dragGhost.style.top = (e.clientY - dragGhost.offsetHeight/2)+'px';
+}
+</script>
+</body>
+</html>

@@ -409,6 +409,11 @@
   .name-slot:hover:not(.locked){border-color:var(--nema);}
   .name-slot.locked{border-color:var(--ok);border-style:solid;background:linear-gradient(180deg,var(--ok-dim),#eafbf1);color:var(--ok);}
   .name-slot.shake{animation:shake .3s;border-color:var(--bad);}
+  /* Resalta la casilla que va a recibir la tarjeta mientras se arrastra,
+     calculada por superposición de área (no por el pixel exacto), para
+     que sea mucho más fácil de "atinar" el suelte. */
+  .name-slot.drop-hover{border-color:var(--nema);border-style:solid;background:var(--nema-dim);
+    box-shadow:0 0 0 3px rgba(11,114,133,.25);transform:scale(1.03);}
   @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
 
   .summary{
@@ -813,9 +818,13 @@ function endRound(){
 
 /* ---------- Pointer-based dragging visuals (desktop + touch) ---------- */
 let dragGhost=null;
+let dragTarget=null; // casilla .name-slot que actualmente "gana" el suelte
+
 function removeGhost(){
   if(dragGhost){ dragGhost.remove(); dragGhost=null; }
+  if(dragTarget){ dragTarget.classList.remove('drop-hover'); dragTarget=null; }
 }
+
 document.addEventListener('pointerdown', (e)=>{
   const card = e.target.closest('.symbol-card');
   if(!card || card.classList.contains('locked')) return;
@@ -826,13 +835,16 @@ document.addEventListener('pointerdown', (e)=>{
   dragGhost.style.height = card.offsetHeight+'px';
   document.body.appendChild(dragGhost);
   moveGhost(e);
+  updateDragTarget();
 });
-document.addEventListener('pointermove', (e)=>{ if(dragGhost) moveGhost(e); });
-document.addEventListener('pointerup', (e)=>{
+document.addEventListener('pointermove', (e)=>{
   if(!dragGhost) return;
-  const el = document.elementFromPoint(e.clientX, e.clientY);
-  const slot = el ? el.closest('.name-slot') : null;
-  if(slot) tryMatch(slot, slot.dataset.id);
+  moveGhost(e);
+  updateDragTarget();
+});
+document.addEventListener('pointerup', ()=>{
+  if(!dragGhost) return;
+  if(dragTarget) tryMatch(dragTarget, dragTarget.dataset.id);
   removeGhost();
 });
 /* pointercancel se dispara en vez de pointerup cuando el navegador
@@ -844,6 +856,37 @@ window.addEventListener('blur', removeGhost);
 function moveGhost(e){
   dragGhost.style.left = (e.clientX - dragGhost.offsetWidth/2)+'px';
   dragGhost.style.top = (e.clientY - dragGhost.offsetHeight/2)+'px';
+}
+
+/* Área de superposición entre dos rectángulos (0 si no se tocan). */
+function overlapArea(r1, r2){
+  const w = Math.min(r1.right, r2.right) - Math.max(r1.left, r2.left);
+  const h = Math.min(r1.bottom, r2.bottom) - Math.max(r1.top, r2.top);
+  return (w>0 && h>0) ? w*h : 0;
+}
+
+/* En vez de mirar solo el pixel exacto bajo el dedo/cursor (frágil:
+   basta soltar 1px fuera del texto y falla), se calcula qué casilla
+   de nombre tiene MÁS ÁREA en común con la tarjeta que se arrastra.
+   Esto hace el suelte mucho más tolerante y además permite resaltar
+   en vivo la casilla que va a recibir la tarjeta. */
+function updateDragTarget(){
+  const ghostRect = dragGhost.getBoundingClientRect();
+  let best=null, bestArea=0;
+  document.querySelectorAll('.name-slot:not(.locked)').forEach(slot=>{
+    const area = overlapArea(ghostRect, slot.getBoundingClientRect());
+    if(area>bestArea){ bestArea=area; best=slot; }
+  });
+  // Exige al menos ~12% del área de la tarjeta para contar como objetivo,
+  // así evita marcar la casilla más cercana cuando el fantasma todavía
+  // no la toca de verdad.
+  const minArea = (ghostRect.width*ghostRect.height)*0.12;
+  const target = (best && bestArea>=minArea) ? best : null;
+  if(target !== dragTarget){
+    if(dragTarget) dragTarget.classList.remove('drop-hover');
+    dragTarget = target;
+    if(dragTarget) dragTarget.classList.add('drop-hover');
+  }
 }
 </script>
 </body>

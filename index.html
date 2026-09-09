@@ -611,6 +611,7 @@ const SYMBOLS = [
   { id:'motor tri',           name:'Motor trifasico' },
   { id:'sirena',              name:'Sirena' },
   { id:'contac cierre retar', name:'Contacto de cierre retardado a la desconexion' },
+{ id:'contac cierre retar', name:'Contacto de cierre retardado a la desconexion' },
   { id:'contac aper retar',   name:'Contacto de apertura retarado a la desconexion' },
   { id:'material semi',       name:'Material semiconductor' },
   { id:'defectos aislami',    name:'Defectos de aislamiento' },
@@ -620,7 +621,7 @@ function imgPath(id){ return 'images/iec/' + id + '.png'; }
 const LEVELS = {
   facil:   { label:'Fácil',   count:6,  time:60 },
   medio:   { label:'Medio',   count:8,  time:60 },
-  dificil: { label:'Difícil', count:12, time:60 }
+  dificil: { label:'Difícil', count:12, time:30 },
 };
 
 let state = { level:'medio', round:[], picked:null, assignments:{}, finished:false, ok:0, bad:0, timeLeft:60, timer:null };

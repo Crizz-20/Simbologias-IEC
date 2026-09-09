@@ -397,24 +397,40 @@
     touch-action:none;user-select:none;position:relative;
     transition:border-color .15s, box-shadow .15s, transform .12s, background .2s;
   }
-  .symbol-card{cursor:grab;border-left:3px solid var(--iec);}
-  .symbol-card:hover:not(.locked){transform:translateY(-2px);box-shadow:0 10px 22px -14px rgba(19,35,64,.4);}
+  .symbol-card{cursor:pointer;border-left:3px solid var(--iec);}
+  .symbol-card:hover:not(.used){transform:translateY(-2px);box-shadow:0 10px 22px -14px rgba(19,35,64,.4);}
   .symbol-card.picked{border-color:var(--iec);box-shadow:0 0 0 2px var(--iec-dim),0 8px 20px -8px rgba(232,89,12,.35);z-index:5;}
-  .symbol-card.dragging{position:fixed;z-index:50;pointer-events:none;box-shadow:0 12px 30px rgba(19,35,64,.35);}
   .symbol-card img{max-width:88%;max-height:70px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(19,35,64,.12));}
   .symbol-card .fallback{font-size:10px;color:var(--muted);text-align:center;line-height:1.4;padding:0 6px;}
-  .symbol-card.locked{border-color:var(--ok);border-left-color:var(--ok);background:linear-gradient(180deg,var(--ok-dim),#eafbf1);cursor:default;}
+  /* Símbolo ya colocado en alguna respuesta: se atenúa un poco pero
+     sigue siendo clicable, para poder "recogerlo" y moverlo a otra
+     respuesta con un solo click. */
+  .symbol-card.used{opacity:.5;}
 
-  .name-slot{font-size:12.5px;line-height:1.3;padding:0 10px;text-align:center;color:var(--text);border-style:dashed;cursor:pointer;}
-  .name-slot:hover:not(.locked){border-color:var(--nema);}
-  .name-slot.locked{border-color:var(--ok);border-style:solid;background:linear-gradient(180deg,var(--ok-dim),#eafbf1);color:var(--ok);}
-  .name-slot.shake{animation:shake .3s;border-color:var(--bad);}
-  /* Resalta la casilla que va a recibir la tarjeta mientras se arrastra,
-     calculada por superposición de área (no por el pixel exacto), para
-     que sea mucho más fácil de "atinar" el suelte. */
-  .name-slot.drop-hover{border-color:var(--nema);border-style:solid;background:var(--nema-dim);
-    box-shadow:0 0 0 3px rgba(11,114,133,.25);transform:scale(1.03);}
-  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+  /* ---------- Fila de respuesta: nombre + casilla con la imagen ---------- */
+  .match-row{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border:1.5px solid var(--border);background:linear-gradient(180deg, #ffffff, var(--panel-2));
+    border-radius:8px;padding:10px 12px;margin-bottom:10px;min-height:64px;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .match-name{font-size:12.5px;line-height:1.35;color:var(--text);flex:1;text-align:left;}
+  .match-slot{
+    flex:0 0 64px;width:64px;height:64px;border-radius:8px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;position:relative;
+    border:1.5px dashed var(--border);background:var(--panel);
+    transition:border-color .15s, box-shadow .15s, background .15s, transform .12s;
+  }
+  .match-slot:hover:not(.correct):not(.incorrect){border-color:var(--nema);}
+  .match-slot .match-slot-empty{color:var(--border-soft);font-size:22px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+  .match-slot.filled{border-style:solid;border-color:var(--nema);background:var(--nema-dim);}
+  .match-slot.filled:hover{transform:scale(1.04);}
+  .match-slot img{max-width:80%;max-height:80%;object-fit:contain;}
+  .match-slot .fallback{font-size:8px;color:var(--muted);text-align:center;line-height:1.2;padding:0 3px;}
+  .match-slot.correct{border-style:solid;border-color:var(--ok);background:linear-gradient(180deg,var(--ok-dim),#eafbf1);box-shadow:0 0 0 3px rgba(20,153,84,.2);cursor:default;}
+  .match-slot.incorrect{border-style:solid;border-color:var(--bad);background:var(--bad-dim);box-shadow:0 0 0 3px rgba(230,57,70,.2);cursor:default;}
+  /* Tablero ya comprobado: nada se puede seguir moviendo */
+  .stage.finished .drag-grid{pointer-events:none;}
 
   .summary{
     position:absolute;inset:0;background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.98), rgba(243,247,252,.98));
@@ -501,6 +517,7 @@
       <button class="btn" id="changeLevelBtn">Cambiar nivel</button>
       <button class="btn success" id="startBtn">Iniciar ronda</button>
       <button class="btn primary" id="restartBtn">Reiniciar ronda</button>
+      <button class="btn success" id="checkBtn" disabled>Comprobar</button>
       <div class="readouts">
         <div class="readout time"><div class="val" id="rTime">60</div><div class="lbl">seg</div></div>
         <div class="readout ok"><div class="val" id="rOk">0</div><div class="lbl">aciertos</div></div>
@@ -606,11 +623,10 @@ const LEVELS = {
   dificil: { label:'Difícil', count:12, time:60 }
 };
 
-let state = { level:'medio', round:[], picked:null, ok:0, bad:0, timeLeft:60, timer:null };
+let state = { level:'medio', round:[], picked:null, assignments:{}, finished:false, ok:0, bad:0, timeLeft:60, timer:null };
 
 /* ---------- Screen navigation ---------- */
 function showScreen(id, pushHistory){
-  if(typeof removeGhost === 'function') removeGhost();
   if(pushHistory === undefined) pushHistory = true;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -648,6 +664,7 @@ document.querySelectorAll('.level-card').forEach(card=>{
 });
 document.getElementById('startBtn').addEventListener('click', beginRound);
 document.getElementById('restartBtn').addEventListener('click', prepareRound);
+document.getElementById('checkBtn').addEventListener('click', ()=> finishRound(false));
 
 /* ---------- Pone los fondos configurados arriba, apenas carga la página ---------- */
 (function inicializarFondos(){
@@ -664,7 +681,7 @@ function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const
    corre y las tarjetas están bloqueadas hasta pulsar "Iniciar ronda". */
 function prepareRound(){
   clearInterval(state.timer);
-  state.ok=0; state.bad=0; state.picked=null;
+  state.ok=0; state.bad=0; state.picked=null; state.assignments={}; state.finished=false;
   document.getElementById('rOk').textContent='0';
   document.getElementById('rBad').textContent='0';
 
@@ -673,9 +690,10 @@ function prepareRound(){
   state.timeLeft = cfg.time;
   document.getElementById('rTime').textContent = state.timeLeft;
 
-  renderDrag();
+  renderBoard();
 
   const stage = document.getElementById('stage');
+  stage.classList.remove('finished');
   stage.classList.add('not-started');
   stage.insertAdjacentHTML('beforeend', `<div class="stage-startgate">
     <button class="btn success" onclick="beginRound()">▶ Iniciar ronda</button>
@@ -693,7 +711,7 @@ function beginRound(){
   state.timer = setInterval(()=>{
     state.timeLeft--;
     document.getElementById('rTime').textContent = Math.max(state.timeLeft,0);
-    if(state.timeLeft<=0){ clearInterval(state.timer); endRound(); }
+    if(state.timeLeft<=0){ clearInterval(state.timer); if(!state.finished) finishRound(true); }
   },1000);
 }
 
@@ -703,8 +721,20 @@ function startRound(){
   beginRound();
 }
 
-function renderDrag(){
-  if(typeof removeGhost === 'function') removeGhost();
+/* ---------- Tablero: click para elegir símbolo, click para asignarlo ----------
+   Ya no se arrastra nada. El flujo es:
+   1) Click en un símbolo de la izquierda -> queda "elegido" (resaltado).
+   2) Click en la casilla de una respuesta (derecha) -> ahí se coloca la
+      imagen del símbolo elegido. Si esa respuesta ya tenía otro símbolo,
+      ese símbolo queda libre de nuevo automáticamente.
+   3) Se puede cambiar cualquier respuesta ya puesta: solo hay que elegir
+      otro símbolo y volver a hacer click en esa misma casilla.
+   4) Click en una casilla llena SIN tener ningún símbolo elegido -> la
+      vacía (por si el jugador se equivocó y quiere dejarla en blanco).
+   5) El botón "Comprobar" se habilita recién cuando las 8 (o 6/12)
+      respuestas están completas, y al presionarlo se revisa todo de una
+      sola vez y se muestra el resultado final. */
+function renderBoard(){
   const stage = document.getElementById('stage');
   const symbolsShuffled = shuffle(state.round);
   const namesShuffled = shuffle(state.round);
@@ -721,47 +751,115 @@ function renderDrag(){
     el.dataset.id=item.id;
     el.innerHTML = `<img src="${imgPath(item.id)}" alt="${item.name}"
       onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'fallback',textContent:'${item.name.replace(/'/g,"\\'")}'}))">`;
+    el.addEventListener('click', ()=> selectSymbol(item.id));
     symCol.appendChild(el);
-    el.addEventListener('pointerdown', ()=> pickCard(el, item.id));
   });
 
   namesShuffled.forEach(item=>{
-    const el = document.createElement('div');
-    el.className='card name-slot';
-    el.dataset.id=item.id;
-    el.textContent=item.name;
-    el.addEventListener('click', ()=> tryMatch(el, item.id));
-    nameCol.appendChild(el);
+    const row = document.createElement('div');
+    row.className='match-row';
+    row.dataset.id=item.id;
+    row.innerHTML = `
+      <div class="match-name">${item.name}</div>
+      <div class="match-slot" data-id="${item.id}"><span class="match-slot-empty">?</span></div>
+    `;
+    row.querySelector('.match-slot').addEventListener('click', ()=> assignToSlot(item.id));
+    nameCol.appendChild(row);
   });
+
+  refreshBoard();
 }
 
-function pickCard(el, id){
-  if(el.classList.contains('locked')) return;
-  document.querySelectorAll('.symbol-card.picked').forEach(c=>c.classList.remove('picked'));
-  state.picked = id;
-  el.classList.add('picked');
+/* Elige (o des-elige, si vuelves a hacer click en el mismo) un símbolo
+   de la columna izquierda como el "activo" para colocar. */
+function selectSymbol(id){
+  if(state.finished) return;
+  state.picked = (state.picked === id) ? null : id;
+  refreshBoard();
 }
 
-function tryMatch(slotEl, slotId){
-  if(!state.picked || slotEl.classList.contains('locked')) return;
-  const cardEl = document.querySelector('.symbol-card[data-id="'+state.picked+'"]');
-  if(state.picked === slotId){
-    cardEl.classList.remove('picked');
-    cardEl.classList.add('locked');
-    slotEl.classList.add('locked');
-    state.picked=null;
-    state.ok++;
-    document.getElementById('rOk').textContent=state.ok;
-    burstSparks(slotEl, 'var(--ok)');
-    if(document.querySelectorAll('.symbol-card.locked').length === state.round.length){
-      clearInterval(state.timer); endRound();
-    }
-  } else {
-    state.bad++;
-    document.getElementById('rBad').textContent=state.bad;
-    slotEl.classList.add('shake');
-    setTimeout(()=> slotEl.classList.remove('shake'), 300);
+/* Coloca el símbolo elegido en la respuesta "rowId", o si no hay ninguno
+   elegido, vacía esa respuesta (para poder rehacerla). */
+function assignToSlot(rowId){
+  if(state.finished) return;
+  if(state.picked){
+    const symId = state.picked;
+    // Si ese símbolo ya estaba puesto en otra respuesta, la deja libre.
+    Object.keys(state.assignments).forEach(r=>{
+      if(state.assignments[r] === symId) state.assignments[r] = null;
+    });
+    state.assignments[rowId] = symId;
+    state.picked = null;
+  } else if(state.assignments[rowId]){
+    state.assignments[rowId] = null;
   }
+  refreshBoard();
+}
+
+/* Repinta símbolos (elegido / ya-usado) y casillas (vacía / con imagen),
+   y actualiza si el botón "Comprobar" ya se puede pulsar. */
+function refreshBoard(){
+  const usedIds = new Set(Object.values(state.assignments).filter(Boolean));
+
+  document.querySelectorAll('.symbol-card').forEach(card=>{
+    const id = card.dataset.id;
+    card.classList.toggle('picked', state.picked === id);
+    card.classList.toggle('used', usedIds.has(id) && state.picked !== id);
+  });
+
+  document.querySelectorAll('.match-slot').forEach(slot=>{
+    const rowId = slot.dataset.id;
+    const assignedId = state.assignments[rowId];
+    if(assignedId){
+      const item = SYMBOLS.find(s=> s.id === assignedId);
+      const safeName = item ? item.name.replace(/'/g,"\\'") : '';
+      slot.classList.add('filled');
+      slot.innerHTML = `<img src="${imgPath(assignedId)}" alt="${item?item.name:''}"
+        onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'fallback',textContent:'${safeName}'}))">`;
+    } else {
+      slot.classList.remove('filled');
+      slot.innerHTML = `<span class="match-slot-empty">?</span>`;
+    }
+  });
+
+  updateCheckButton();
+}
+
+function updateCheckButton(){
+  const btn = document.getElementById('checkBtn');
+  if(!btn) return;
+  const total = state.round.length;
+  const filled = Object.values(state.assignments).filter(Boolean).length;
+  btn.disabled = state.finished || total===0 || filled < total;
+}
+
+/* Revisa todas las respuestas de una sola vez (botón "Comprobar" o
+   se acabó el tiempo) y muestra el resumen final. */
+function finishRound(timedOut){
+  if(state.finished) return;
+  state.finished = true;
+  clearInterval(state.timer);
+
+  let ok=0, bad=0;
+  state.round.forEach(item=>{
+    const assigned = state.assignments[item.id];
+    const slot = document.querySelector('.match-slot[data-id="'+item.id+'"]');
+    if(!slot) return;
+    if(assigned === item.id){
+      ok++; slot.classList.add('correct');
+      burstSparks(slot, 'var(--ok)');
+    } else {
+      bad++; slot.classList.add('incorrect');
+    }
+  });
+  state.ok = ok; state.bad = bad;
+  document.getElementById('rOk').textContent = ok;
+  document.getElementById('rBad').textContent = bad;
+
+  const stage = document.getElementById('stage');
+  stage.classList.add('finished');
+  updateCheckButton();
+  endRound(timedOut);
 }
 
 function burstSparks(anchorEl, color){
@@ -782,7 +880,7 @@ function burstSparks(anchorEl, color){
   }
 }
 
-function endRound(){
+function endRound(timedOut){
   const stage = document.getElementById('stage');
   const total = state.round.length;
   const pct = total? Math.round((state.ok/total)*100) : 0;
@@ -791,7 +889,7 @@ function endRound(){
   overlay.innerHTML = `
     <div class="big">${pct}%</div>
     <h3>${state.ok} de ${total} correctos</h3>
-    <p>Errores: ${state.bad} · Nivel: ${LEVELS[state.level].label}</p>
+    <p>${timedOut? 'Se acabó el tiempo · ' : ''}Errores: ${state.bad} · Nivel: ${LEVELS[state.level].label}</p>
     <div class="actions">
       <button class="btn primary" onclick="startRound()">Jugar de nuevo</button>
       <button class="btn" onclick="document.getElementById('changeLevelBtn').click()">Cambiar nivel</button>
@@ -813,79 +911,6 @@ function endRound(){
       overlay.appendChild(s);
       setTimeout(()=> s.remove(), 1200);
     }
-  }
-}
-
-/* ---------- Pointer-based dragging visuals (desktop + touch) ---------- */
-let dragGhost=null;
-let dragTarget=null; // casilla .name-slot que actualmente "gana" el suelte
-
-function removeGhost(){
-  if(dragGhost){ dragGhost.remove(); dragGhost=null; }
-  if(dragTarget){ dragTarget.classList.remove('drop-hover'); dragTarget=null; }
-}
-
-document.addEventListener('pointerdown', (e)=>{
-  const card = e.target.closest('.symbol-card');
-  if(!card || card.classList.contains('locked')) return;
-  removeGhost(); // por si quedó uno huérfano de un gesto anterior interrumpido
-  dragGhost = card.cloneNode(true);
-  dragGhost.classList.add('dragging');
-  dragGhost.style.width = card.offsetWidth+'px';
-  dragGhost.style.height = card.offsetHeight+'px';
-  document.body.appendChild(dragGhost);
-  moveGhost(e);
-  updateDragTarget();
-});
-document.addEventListener('pointermove', (e)=>{
-  if(!dragGhost) return;
-  moveGhost(e);
-  updateDragTarget();
-});
-document.addEventListener('pointerup', ()=>{
-  if(!dragGhost) return;
-  if(dragTarget) tryMatch(dragTarget, dragTarget.dataset.id);
-  removeGhost();
-});
-/* pointercancel se dispara en vez de pointerup cuando el navegador
-   interrumpe el gesto (scroll táctil, multitouch, cambio de pantalla,
-   etc.). Sin este listener el fantasma se quedaba flotando para
-   siempre — es el bug de la tarjeta duplicada pegada en pantalla. */
-document.addEventListener('pointercancel', removeGhost);
-window.addEventListener('blur', removeGhost);
-function moveGhost(e){
-  dragGhost.style.left = (e.clientX - dragGhost.offsetWidth/2)+'px';
-  dragGhost.style.top = (e.clientY - dragGhost.offsetHeight/2)+'px';
-}
-
-/* Área de superposición entre dos rectángulos (0 si no se tocan). */
-function overlapArea(r1, r2){
-  const w = Math.min(r1.right, r2.right) - Math.max(r1.left, r2.left);
-  const h = Math.min(r1.bottom, r2.bottom) - Math.max(r1.top, r2.top);
-  return (w>0 && h>0) ? w*h : 0;
-}
-
-/* En vez de mirar solo el pixel exacto bajo el dedo/cursor (frágil:
-   basta soltar 1px fuera del texto y falla), se calcula qué casilla
-   de nombre tiene MÁS ÁREA en común con la tarjeta que se arrastra.
-   Esto hace el suelte mucho más tolerante y además permite resaltar
-   en vivo la casilla que va a recibir la tarjeta. */
-function updateDragTarget(){
-  const ghostRect = dragGhost.getBoundingClientRect();
-  let best=null, bestArea=0;
-  document.querySelectorAll('.name-slot:not(.locked)').forEach(slot=>{
-    const area = overlapArea(ghostRect, slot.getBoundingClientRect());
-    if(area>bestArea){ bestArea=area; best=slot; }
-  });
-  // Exige al menos ~12% del área de la tarjeta para contar como objetivo,
-  // así evita marcar la casilla más cercana cuando el fantasma todavía
-  // no la toca de verdad.
-  const minArea = (ghostRect.width*ghostRect.height)*0.12;
-  const target = (best && bestArea>=minArea) ? best : null;
-  if(target !== dragTarget){
-    if(dragTarget) dragTarget.classList.remove('drop-hover');
-    dragTarget = target;
-    if(dragTarget) dragTarget.classList.add('drop-hover');
   }
 }
 </script>
